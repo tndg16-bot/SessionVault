@@ -419,7 +419,7 @@ async function saveViaRestApi(vaultName, filePath, content) {
 }
 
 /**
- * Start progress animation
+ * Start progress animation (Smooth & Non-linear)
  */
 function startProgressAnimation() {
   const bar = document.getElementById('progressBar');
@@ -429,31 +429,52 @@ function startProgressAnimation() {
   if (!bar || !text || !section) return () => { };
 
   section.classList.remove('hidden');
-  let progress = 0;
 
-  // Reset
-  bar.style.width = '0%';
-  text.textContent = '0%';
+  let animationId;
+  const startTime = Date.now();
 
-  // Update every 1.5s, reaches 90% in ~13.5s
-  const interval = setInterval(() => {
-    if (progress >= 90) {
-      clearInterval(interval);
-      return;
+  const update = () => {
+    const elapsed = (Date.now() - startTime) / 1000; // seconds
+    let target = 0;
+
+    // Non-linear progress curve
+    // 0-2s: Fast start (0 -> 50%)
+    if (elapsed < 2) {
+      target = (elapsed / 2) * 50;
     }
-    progress += 10;
-    bar.style.width = `${progress}%`;
-    text.textContent = `${progress}%`;
-  }, 1500);
+    // 2-10s: Medium pace (50 -> 80%)
+    else if (elapsed < 10) {
+      target = 50 + ((elapsed - 2) / 8) * 30;
+    }
+    // 10s+: Asymptotic crawl (80% -> 95%)
+    else {
+      target = 80 + (1 - Math.exp(-(elapsed - 10) / 10)) * 15;
+    }
 
-  // Return stop function
+    // Cap at 95% until manually stopped
+    if (target > 95) target = 95;
+
+    bar.style.width = `${target}%`;
+    text.textContent = `${Math.floor(target)}%`;
+
+    animationId = requestAnimationFrame(update);
+  };
+
+  // Start loop
+  animationId = requestAnimationFrame(update);
+
+  // Return stop function (called when promise resolves)
   return () => {
-    clearInterval(interval);
+    cancelAnimationFrame(animationId);
     bar.style.width = '100%';
     text.textContent = '100%';
+
     setTimeout(() => {
       section.classList.add('hidden');
-    }, 2000); // Hide after 2s
+      // Reset
+      bar.style.width = '0%';
+      text.textContent = '0%';
+    }, 1500);
   };
 }
 
