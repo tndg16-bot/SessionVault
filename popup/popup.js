@@ -220,17 +220,20 @@ async function saveToObsidian() {
       includeMermaid: elements.includeMermaid.checked
     };
 
-    // Generate summary if enabled
-    let summary = '';
-    if (settings.includeSummary) {
-      summary = await generateSummary(currentData.messages, settings);
+    // Generate content in parallel
+    const summaryPromise = settings.includeSummary
+      ? generateSummary(currentData.messages, settings)
+      : Promise.resolve('');
+
+    const mermaidPromise = settings.includeMermaid
+      ? generateMermaid(currentData.messages, settings)
+      : Promise.resolve('');
+
+    if (settings.includeSummary || settings.includeMermaid) {
+      updateStatus('', 'AI生成中 (要約/Mermaid)...');
     }
 
-    // Generate Mermaid if enabled
-    let mermaid = '';
-    if (settings.includeMermaid) {
-      mermaid = await generateMermaid(currentData.messages, settings);
-    }
+    const [summary, mermaid] = await Promise.all([summaryPromise, mermaidPromise]);
 
     // Build markdown content
     const content = buildMarkdownContent(currentData, summary, mermaid);
