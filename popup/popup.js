@@ -233,7 +233,13 @@ async function saveToObsidian() {
       updateStatus('', 'AI生成中 (要約/Mermaid)...');
     }
 
+    // Start progress animation
+    const stopProgress = startProgressAnimation();
+
     const [summary, mermaid] = await Promise.all([summaryPromise, mermaidPromise]);
+
+    // Stop progress animation
+    stopProgress();
 
     // Build markdown content
     const content = buildMarkdownContent(currentData, summary, mermaid);
@@ -410,6 +416,45 @@ async function saveViaRestApi(vaultName, filePath, content) {
   }
 
   return true;
+}
+
+/**
+ * Start progress animation
+ */
+function startProgressAnimation() {
+  const bar = document.getElementById('progressBar');
+  const text = document.getElementById('progressText');
+  const section = document.getElementById('progressSection');
+
+  if (!bar || !text || !section) return () => { };
+
+  section.classList.remove('hidden');
+  let progress = 0;
+
+  // Reset
+  bar.style.width = '0%';
+  text.textContent = '0%';
+
+  // Update every 1.5s, reaches 90% in ~13.5s
+  const interval = setInterval(() => {
+    if (progress >= 90) {
+      clearInterval(interval);
+      return;
+    }
+    progress += 10;
+    bar.style.width = `${progress}%`;
+    text.textContent = `${progress}%`;
+  }, 1500);
+
+  // Return stop function
+  return () => {
+    clearInterval(interval);
+    bar.style.width = '100%';
+    text.textContent = '100%';
+    setTimeout(() => {
+      section.classList.add('hidden');
+    }, 2000); // Hide after 2s
+  };
 }
 
 /**
