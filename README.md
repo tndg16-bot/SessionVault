@@ -140,7 +140,7 @@ SessionVault/
 
 ## 未決定事項
 
-- [ ] ローカルLLMの具体的な選定（Ollama + モデル名）
+- [x] ローカルLLMの具体的な選定（Ollama + **gemma3:1b**）
 - [ ] Mermaid図の自動生成ロジック
 
 ## 参考

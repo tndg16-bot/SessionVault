@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>SessionVault - DOM Debug Tool</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 {
+      color: #6366f1;
+    }
+    button {
+      padding: 10px 20px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #4f46e5;
+    }
+    #results {
+      margin-top: 20px;
+      padding: 15px;
+      background: #2a2a2a;
+      border-radius: 8px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .result-item {
+      margin-bottom: 20px;
+      padding: 10px;
+      background: #1e1e1e;
+      border-left: 3px solid #6366f1;
+    }
+    .result-title {
+      font-weight: bold;
+      color: #6366f1;
+      margin-bottom: 5px;
+    }
+    pre {
+      background: #0a0a0a;
+      padding: 10px;
+      border-radius: 5px;
+      overflow-x: auto;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>SessionVault - DOM Debug Tool</h1>
+  
+  <button onclick="analyzeDOM()">🔍 ChatGPTのDOMを分析</button>
+  <button onclick="openChatGPT()">🌐 ChatGPTを開く</button>
+  
+  <div id="results">
+    <p>ボタンをクリックして開始してください...</p>
+  </div>
+
+  <script>
+    async function analyzeDOM() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '<h2>DOM分析結果</h2>';
+      
+      try {
+        // Check for message elements
+        const messageElements = document.querySelectorAll('[data-message-author-role]');
+        
+        resultsDiv.innerHTML += `
+          <div class="result-item">
+            <div class="result-title">📊 メッセージ要素数: ${messageElements.length}</div>
+            <div class="result-title">🎯 メッセージ抽出数: ${messageElements.filter(el => el.textContent && el.textContent.trim().length > 0).length}</div>
+          </div>
+        `;
+        
+        if (messageElements.length > 0) {
+          // Analyze first user message
+          const userMessages = Array.from(messageElements).filter(el => el.getAttribute('data-message-author-role') === 'user');
+          if (userMessages.length > 0) {
+            const firstUser = userMessages[0];
+            resultsDiv.innerHTML += `
+              <div class="result-item">
+                <div class="result-title">👤 最初のUserメッセージ構造</div>
+                <pre>${formatElement(firstUser)}</pre>
+              </div>
+            `;
+          }
+          
+          // Analyze first assistant message
+          const assistantMessages = Array.from(messageElements).filter(el => el.getAttribute('data-message-author-role') === 'assistant');
+          if (assistantMessages.length > 0) {
+            const firstAssistant = assistantMessages[0];
+            resultsDiv.innerHTML += `
+              <div class="result-item">
+                <div class="result-title">🤖 最初のAssistantメッセージ構造</div>
+                <pre>${formatElement(firstAssistant)}</pre>
+              </div>
+            `;
+          }
+          
+          // Check for empty messages
+          const emptyMessages = Array.from(messageElements).filter(el => {
+            return !el.textContent || el.textContent.trim().length === 0;
+          });
+          
+          if (emptyMessages.length > 0) {
+            resultsDiv.innerHTML += `
+              <div class="result-item" style="border-left-color: #f44336;">
+                <div class="result-title">⚠️ 空のメッセージ: ${emptyMessages.length}件</div>
+                <pre>これらの要素が抽出失敗の原因かもしれません</pre>
+              </div>
+            `;
+          }
+        }
+        
+        // Check for specific ChatGPT classes
+        const markdownElements = document.querySelectorAll('.markdown');
+        resultsDiv.innerHTML += `
+          <div class="result-item">
+            <div class="result-title">📝 .markdown要素数: ${markdownElements.length}</div>
+          </div>
+        `;
+        
+        const proseElements = document.querySelectorAll('.prose');
+        resultsDiv.innerHTML += `
+          <div class="result-item">
+            <div class="result-title">📖 .prose要素数: ${proseElements.length}</div>
+          </div>
+        `;
+        
+      } catch (error) {
+        resultsDiv.innerHTML += `
+          <div class="result-item" style="border-left-color: #f44336;">
+            <div class="result-title">❌ エラー</div>
+            <pre>${error.message}</pre>
+          </div>
+        `;
+      }
+    }
+    
+    function formatElement(element) {
+      let result = `Role: ${element.getAttribute('data-message-author-role')}\n`;
+      result += `Class: ${element.className}\n`;
+      result += `Has innerText: ${element.innerText ? 'Yes' : 'No'}\n`;
+      result += `TextContent length: ${element.textContent ? element.textContent.length : 0}\n`;
+      result += `Child count: ${element.children ? element.children.length : 0}\n`;
+      
+      if (element.children && element.children.length > 0) {
+        result += '\nChildren:\n';
+        Array.from(element.children).forEach((child, i) => {
+          result += `  [${i}] ${child.tagName} - ${child.className}\n`;
+        });
+      }
+      
+      return result;
+    }
+    
+    function openChatGPT() {
+      window.open('https://chatgpt.com', '_blank');
+    }
+    
+    // Auto-analyze on load
+    window.addEventListener('load', () => {
+      console.log('DOM Debug Tool loaded');
+    });
+  </script>
+</body>
+</html>

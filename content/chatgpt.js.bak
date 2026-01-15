@@ -21,14 +21,30 @@
       messageElements.forEach((element, index) => {
         const role = element.getAttribute('data-message-author-role');
         
-        // Get content using textContent (most reliable)
-        let content = element.textContent || '';
-        content = content.trim();
+        // Get content using multiple methods
+        let content = '';
         
-        // Filter out very short content (likely UI elements)
-        if (content.length < 10) {
-          console.log(`[SessionVault] Skipping short message ${index}: role=${role}, length=${content.length}`);
-          return;
+        // Method 1: Direct innerText
+        if (element.innerText) {
+          content = element.innerText.trim();
+        }
+        
+        // Method 2: Get from markdown container if empty
+        if (content.length === 0) {
+          const markdownEl = element.querySelector('.markdown, .whitespace-pre-wrap');
+          if (markdownEl) {
+            content = markdownEl.innerText.trim();
+          }
+        }
+        
+        // Method 3: Get from children recursively
+        if (content.length === 0) {
+          const children = Array.from(element.children);
+          content = children
+            .map(child => child.innerText)
+            .filter(text => text && text.trim().length > 0)
+            .join('\n\n')
+            .trim();
         }
         
         // Log for debugging

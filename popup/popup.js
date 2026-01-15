@@ -7,7 +7,7 @@ const DEFAULT_SETTINGS = {
   vaultName: 'papa-notes',
   folderPath: 'SessionVault-logs',
   ollamaEndpoint: 'http://localhost:11434',
-  ollamaModel: 'llama3',
+  ollamaModel: 'gemma3:1b',
   obsidianApiKey: 'e02a92151916c4bad4894534f03c58f745d44bf5fa6e0c21fe77c8dd6acce56e',
   includeSummary: true,
   includeMermaid: false,
@@ -55,7 +55,7 @@ async function loadSettings() {
   try {
     const result = await chrome.storage.local.get('settings');
     const settings = { ...DEFAULT_SETTINGS, ...result.settings };
-    
+
     elements.vaultName.value = settings.vaultName;
     elements.folderPath.value = settings.folderPath;
     elements.ollamaEndpoint.value = settings.ollamaEndpoint;
@@ -81,7 +81,7 @@ async function saveSettings() {
     includeMermaid: elements.includeMermaid.checked,
     showPreview: elements.showPreview.checked
   };
-  
+
   try {
     await chrome.storage.local.set({ settings });
     updateStatus('ready', '設定を保存しました');
@@ -97,21 +97,21 @@ async function saveSettings() {
 async function checkCurrentTab() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
+
     if (!tab?.url) {
       updateStatus('error', 'タブ情報を取得できません');
       return;
     }
-    
+
     const supportedSites = [
       { pattern: /chat\.openai\.com|chatgpt\.com/, name: 'ChatGPT' },
       { pattern: /claude\.ai/, name: 'Claude' },
       { pattern: /gemini\.google\.com/, name: 'Gemini' },
       { pattern: /aistudio\.google\.com/, name: 'Google AI Studio' }
     ];
-    
+
     const site = supportedSites.find(s => s.pattern.test(tab.url));
-    
+
     if (site) {
       updateStatus('ready', `${site.name} - 準備完了`);
       elements.extractBtn.disabled = false;
@@ -139,22 +139,27 @@ function updateStatus(state, message) {
 async function extractConversation() {
   updateStatus('', '会話を取得中...');
   elements.extractBtn.disabled = true;
-  
+
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    const response = await chrome.tabs.sendMessage(tab.id, {
+    const tabId = tab ? tab.id : null;
+
+    if (!tabId) {
+      throw new Error('アクティブなタブが見つかりません');
+    }
+
+    const response = await chrome.tabs.sendMessage(tabId, {
       action: 'extractConversation'
     });
-    
+
     if (response?.success) {
       currentData = response.data;
-      
+
       // Show preview if enabled
       if (elements.showPreview.checked) {
         showPreview(currentData);
       }
-      
+
       updateStatus('ready', `${currentData.messages.length}件のメッセージを取得`);
       elements.saveBtn.disabled = false;
     } else {
@@ -173,11 +178,11 @@ async function extractConversation() {
  */
 function showPreview(data) {
   elements.previewSection.classList.remove('hidden');
-  
+
   let previewText = `📌 ${data.title}\n`;
   previewText += `🔗 ${data.url}\n`;
   previewText += `📝 ${data.messages.length}件のメッセージ\n\n`;
-  
+
   // Show first few messages
   const maxPreview = 3;
   data.messages.slice(0, maxPreview).forEach((msg, i) => {
@@ -185,11 +190,11 @@ function showPreview(data) {
     const content = msg.content.substring(0, 100);
     previewText += `${role} ${content}${msg.content.length > 100 ? '...' : ''}\n\n`;
   });
-  
+
   if (data.messages.length > maxPreview) {
     previewText += `... 他 ${data.messages.length - maxPreview}件`;
   }
-  
+
   elements.preview.textContent = previewText;
 }
 
@@ -201,48 +206,48 @@ async function saveToObsidian() {
     updateStatus('error', '保存するデータがありません');
     return;
   }
-  
+
   updateStatus('', 'Obsidianに保存中...');
   elements.saveBtn.disabled = true;
-  
+
   try {
     // Get settings
     const result = await chrome.storage.local.get('settings');
     const settings = { ...DEFAULT_SETTINGS, ...result.settings };
-    
+
     // Generate summary if enabled
     let summary = '';
     if (settings.includeSummary) {
       summary = await generateSummary(currentData.messages, settings);
     }
-    
+
     // Generate Mermaid if enabled
     let mermaid = '';
     if (settings.includeMermaid) {
       mermaid = await generateMermaid(currentData.messages, settings);
     }
-    
+
     // Build markdown content
     const content = buildMarkdownContent(currentData, summary, mermaid);
-    
+
     // Generate filename
     const date = new Date().toISOString().split('T')[0];
     const safeTitle = currentData.title.replace(/[<>:"/\\|?*]/g, '_').substring(0, 50);
     const filename = `${date}_${currentData.source}_${safeTitle}.md`;
-    
+
     // Save via Obsidian REST API
     const filePath = `${settings.folderPath}/${filename}`;
     await saveViaRestApi(settings.vaultName, filePath, content);
-    
+
     updateStatus('ready', '保存完了!');
-    
+
     // Reset state
     setTimeout(() => {
       currentData = null;
       elements.saveBtn.disabled = true;
       elements.previewSection.classList.add('hidden');
     }, 2000);
-    
+
   } catch (error) {
     updateStatus('error', `保存失敗: ${error.message}`);
     console.error('Save error:', error);
@@ -259,14 +264,14 @@ async function generateSummary(messages, settings) {
     const conversationText = messages
       .map(m => `${m.role}: ${m.content}`)
       .join('\n\n');
-    
+
     const prompt = `以下の会話を簡潔に要約してください。重要なポイントを箇条書きで3-5点にまとめてください。
 
 会話:
 ${conversationText}
 
 要約:`;
-    
+
     const response = await fetch(`${settings.ollamaEndpoint}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -276,11 +281,11 @@ ${conversationText}
         stream: false
       })
     });
-    
+
     if (!response.ok) {
       throw new Error('Ollama API error');
     }
-    
+
     const data = await response.json();
     return data.response || '';
   } catch (error) {
@@ -297,7 +302,7 @@ async function generateMermaid(messages, settings) {
     const conversationText = messages
       .map(m => `${m.role}: ${m.content}`)
       .join('\n\n');
-    
+
     const prompt = `以下の会話の流れをMermaid.jsのフローチャート形式で表現してください。
 シンプルで見やすい図にしてください。コードブロックは不要で、Mermaid記法のみを出力してください。
 
@@ -305,7 +310,7 @@ async function generateMermaid(messages, settings) {
 ${conversationText}
 
 Mermaidフローチャート:`;
-    
+
     const response = await fetch(`${settings.ollamaEndpoint}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -315,11 +320,11 @@ Mermaidフローチャート:`;
         stream: false
       })
     });
-    
+
     if (!response.ok) {
       throw new Error('Ollama API error');
     }
-    
+
     const data = await response.json();
     return data.response || '';
   } catch (error) {
@@ -333,7 +338,7 @@ Mermaidフローチャート:`;
  */
 function buildMarkdownContent(data, summary, mermaid) {
   const date = new Date().toISOString();
-  
+
   let content = `---
 source: ${data.source}
 url: ${data.url}
@@ -379,9 +384,9 @@ async function saveViaRestApi(vaultName, filePath, content) {
   const result = await chrome.storage.local.get('settings');
   const settings = { ...DEFAULT_SETTINGS, ...result.settings };
   const apiKey = settings.obsidianApiKey || DEFAULT_SETTINGS.obsidianApiKey;
-  
+
   const apiUrl = `http://127.0.0.1:27123/vault/${encodeURIComponent(filePath)}`;
-  
+
   const response = await fetch(apiUrl, {
     method: 'PUT',
     headers: {
@@ -390,12 +395,12 @@ async function saveViaRestApi(vaultName, filePath, content) {
     },
     body: content
   });
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`REST API error: ${response.status} - ${errorText}`);
   }
-  
+
   return true;
 }
 
@@ -414,7 +419,7 @@ function setupEventListeners() {
  */
 async function checkForUpdate() {
   updateStatus('', '更新を確認中...');
-  
+
   try {
     const response = await fetch(GITHUB_API_URL, {
       method: 'GET',
@@ -422,7 +427,7 @@ async function checkForUpdate() {
         'Accept': 'application/vnd.github.v3+json'
       }
     });
-    
+
     if (!response.ok) {
       console.error('GitHub API response:', response.status, response.statusText);
       if (response.status === 404) {
@@ -432,16 +437,16 @@ async function checkForUpdate() {
       }
       throw new Error(`GitHub API error: ${response.status}`);
     }
-    
+
     const data = await response.json();
     const latestVersion = data.tag_name.replace('v', '');
-    
+
     console.log(`Versions: Current=${CURRENT_VERSION}, Latest=${latestVersion}`);
-    
+
     // Simple version comparison
     const currentParts = CURRENT_VERSION.split('.').map(Number);
     const latestParts = latestVersion.split('.').map(Number);
-    
+
     let isNewer = false;
     for (let i = 0; i < Math.max(currentParts.length, latestParts.length); i++) {
       const current = currentParts[i] || 0;
@@ -454,7 +459,7 @@ async function checkForUpdate() {
         break;
       }
     }
-    
+
     if (isNewer) {
       updateStatus('ready', `新しいバージョン v${latestVersion} があります！`);
       if (confirm(`更新があります！\n\n現在: v${CURRENT_VERSION}\n最新: v${latestVersion}\n\nGitHub Releasesページを開きますか？`)) {
@@ -466,7 +471,7 @@ async function checkForUpdate() {
   } catch (error) {
     console.error('Update check error:', error);
     updateStatus('error', `更新確認失敗: ${error.message}`);
-    
+
     // Show error details
     setTimeout(() => {
       alert(`更新確認中にエラーが発生しました：\n${error.message}\n\nリポジトリを作成していない場合、最初にGitHubでリポジトリを作成してください。`);
