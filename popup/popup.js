@@ -213,7 +213,12 @@ async function saveToObsidian() {
   try {
     // Get settings
     const result = await chrome.storage.local.get('settings');
-    const settings = { ...DEFAULT_SETTINGS, ...result.settings };
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      ...result.settings,
+      includeSummary: elements.includeSummary.checked,
+      includeMermaid: elements.includeMermaid.checked
+    };
 
     // Generate summary if enabled
     let summary = '';
